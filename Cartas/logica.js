@@ -3,7 +3,6 @@
 // ==========================
 let segments = [];
 const STORAGE_KEY = 'ruletaPreguntasCustom';
-let editingIndex = null;
 let preguntaSeleccionada = null;
 
 // ==========================
@@ -25,14 +24,16 @@ const resetUsedBtn = document.getElementById('resetUsedButton');
 const editModal = document.getElementById('editModal');
 const closeEditModalButton = document.getElementById('closeEditModalButton');
 const saveEditButton = document.getElementById('saveEditButton');
+const shareButton = document.getElementById('shareButton');
+const shareLinkInput = document.getElementById('shareLinkInput');
 
 // ==========================
 // 🧪 Preguntas por defecto
 // ==========================
 const defaultSegments = [
-  { number: "1", pregunta: "1. ¿Pregunta de ejemplo 1?", respuesta: "Respuesta 1", used: false },
-  { number: "2", pregunta: "2. ¿Pregunta de ejemplo 2?", respuesta: "Respuesta 2", used: false },
-  { number: "3", pregunta: "3. ¿Puedes añadir más?", respuesta: "¡Claro! Usa el menú.", used: false },
+  { number: "1", pregunta: "¿Ejemplo 1?", respuesta: "Respuesta 1", used: false },
+  { number: "2", pregunta: "¿Ejemplo 2?", respuesta: "Respuesta 2", used: false },
+  { number: "3", pregunta: "¿Ejemplo 3?", respuesta: "Respuesta 3", used: false },
 ];
 
 // ==========================
@@ -40,20 +41,17 @@ const defaultSegments = [
 // ==========================
 function showNotification(message, type = 'success') {
   const notification = document.getElementById('notification');
-  let icon;
-  switch (type) {
-    case 'success': icon = '✅'; break;
-    case 'error': icon = '❌'; break;
-    case 'clipboard': icon = '📄'; break;
-    case 'delete': icon = '🗑️'; break;
-    default: icon = '';
-  }
+  let icon = '✅';
+  if (type === 'error') icon = '❌';
+  else if (type === 'clipboard') icon = '📄';
+  else if (type === 'delete') icon = '🗑️';
+  else if (type === 'info') icon = 'ℹ️';
   notification.innerHTML = `${icon} ${message}`;
   notification.className = `notification show ${type}`;
   setTimeout(() => {
     notification.classList.remove('show');
     notification.classList.add('hidden');
-  }, 1500);
+  }, 2000);
 }
 
 // ==========================
@@ -91,7 +89,6 @@ function renderCards() {
     cardsContainer.innerHTML = '<p style="font-size:1.2em;">🎉 ¡Todas las preguntas han sido usadas!</p>';
     return;
   }
-
   disponibles.forEach(seg => {
     const card = document.createElement('div');
     card.className = 'card';
@@ -117,6 +114,9 @@ function handleCardClick(number) {
   renderCards();
 }
 
+// ==========================
+// Mostrar respuesta
+// ==========================
 function mostrarRespuesta() {
   if (preguntaSeleccionada) {
     bannerRespuesta.textContent = preguntaSeleccionada.respuesta;
@@ -124,7 +124,7 @@ function mostrarRespuesta() {
 }
 
 // ==========================
-// ♻️ Reiniciar estado de uso
+// ♻️ Reiniciar cartas usadas
 // ==========================
 function resetUsedStatus() {
   segments.forEach(s => s.used = false);
@@ -134,7 +134,7 @@ function resetUsedStatus() {
 }
 
 // ==========================
-// 🧾 Renderizar lista de preguntas
+// 🧾 Lista en modal
 // ==========================
 function renderQuestionList() {
   questionListElement.innerHTML = '';
@@ -153,13 +153,13 @@ function renderQuestionList() {
 }
 
 // ==========================
-// ➕ Añadir nueva pregunta
+// ➕ Añadir pregunta
 // ==========================
 function addQuestion() {
   const q = document.getElementById('newQuestion').value.trim();
   const a = document.getElementById('newAnswer').value.trim();
   if (!q || !a) {
-    showNotification("Introduce pregunta y respuesta", "error");
+    showNotification("Completa ambos campos", "error");
     return;
   }
   const newNum = (segments.reduce((max, s) => Math.max(max, parseInt(s.number)), 0) + 1).toString();
@@ -179,14 +179,15 @@ function deleteQuestion(num) {
   if (!confirm(`¿Eliminar pregunta ${num}?`)) return;
   segments = segments.filter(s => s.number !== num);
   saveQuestions();
-  renderQuestionList();
   renderCards();
+  renderQuestionList();
   showNotification(`Pregunta ${num} eliminada`, "delete");
 }
 
 // ==========================
-// ✏️ Editar y guardar pregunta
+// ✏️ Editar pregunta
 // ==========================
+let editingIndex = null;
 function editQuestion(index) {
   editingIndex = index;
   const seg = segments[index];
@@ -213,7 +214,104 @@ function saveEdit() {
 }
 
 // ==========================
-// 🎯 Eventos
+// 🔗 Compartir con URL corta (is.gd)
+// ==========================
+async function shortenUrl(longUrl) {
+  try {
+    const response = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`);
+    if (!response.ok) throw new Error(`Error en API: ${response.status}`);
+    return await response.text();
+  } catch (error) {
+    console.error("Error acortando URL:", error);
+    throw error;
+  }
+}
+
+shareButton.addEventListener('click', async () => {
+  const ruletaData = {
+    title: document.querySelector('.container h1').textContent,
+    segments: segments
+  };
+  const encodedData = encodeURIComponent(JSON.stringify(ruletaData));
+  const baseUrl = window.location.origin + window.location.pathname;
+  const longUrl = `${baseUrl}?data=${encodedData}`;
+
+  try {
+    showNotification("Generando enlace corto...", "info");
+    const shortUrl = await shortenUrl(longUrl);
+    await navigator.clipboard.writeText(shortUrl);
+    shareLinkInput.style.display = "block";
+    shareLinkInput.value = shortUrl;
+    showNotification("¡Enlace corto copiado al portapapeles!", "clipboard");
+  } catch (err) {
+    console.error("Error al generar enlace corto:", err);
+    try {
+      await navigator.clipboard.writeText(longUrl);
+      shareLinkInput.style.display = "block";
+      shareLinkInput.value = longUrl;
+      showNotification("¡Enlace copiado! (Usamos URL larga)", "clipboard");
+    } catch (copyError) {
+      console.error("Error al copiar el enlace:", copyError);
+      showNotification("Error al copiar el enlace", "error");
+    }
+  }
+});
+
+// ==========================
+// 📥 Cargar desde URL
+// ==========================
+function loadFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("data")) {
+    try {
+      const data = JSON.parse(decodeURIComponent(params.get("data")));
+      if (data.title) {
+        document.querySelector('.container h1').textContent = data.title;
+        localStorage.setItem('ruletaTitle', data.title);
+      }
+      if (Array.isArray(data.segments)) {
+        segments = data.segments.map(s => ({ ...s, used: false }));
+        saveQuestions();
+        renderCards();
+        renderQuestionList();
+      }
+    } catch (e) {
+      console.error("❌ Error cargando datos desde URL:", e);
+      showNotification("Datos inválidos en la URL", "error");
+    }
+  }
+}
+
+// ==========================
+// 🚀 Inicialización
+// ==========================
+window.addEventListener('DOMContentLoaded', () => {
+  loadFromUrl();
+  const storedTitle = localStorage.getItem('ruletaTitle');
+  const titleDisplay = document.querySelector('.container h1');
+  const titleInput = document.getElementById('newTitle');
+  if (storedTitle) {
+    titleDisplay.textContent = storedTitle;
+    titleInput.value = storedTitle;
+  } else {
+    titleInput.value = titleDisplay.textContent;
+  }
+  document.getElementById('changeTitleButton').addEventListener('click', () => {
+    const newTitle = titleInput.value.trim();
+    if (newTitle) {
+      titleDisplay.textContent = newTitle;
+      localStorage.setItem('ruletaTitle', newTitle);
+      showNotification("Título cambiado");
+    } else {
+      showNotification("Ingresa un título válido.", "error");
+    }
+  });
+  loadQuestions();
+  renderCards();
+});
+
+// ==========================
+// Eventos generales
 // ==========================
 bannerAnswerButton.addEventListener("click", mostrarRespuesta);
 closeBanner.addEventListener("click", () => banner.classList.remove("visible"));
@@ -233,133 +331,14 @@ questionListElement.addEventListener('click', (e) => {
     editQuestion(e.target.getAttribute('data-index'));
   }
 });
-
 closeEditModalButton.addEventListener('click', () => {
   editModal.classList.remove('visible');
   editingIndex = null;
 });
-
 editModal.addEventListener('click', (e) => {
   if (e.target === editModal) {
     editModal.classList.remove('visible');
     editingIndex = null;
   }
 });
-
-document.getElementById('fullscreenButton').addEventListener('click', () => {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen();
-  } else {
-    document.exitFullscreen();
-  }
-});// ==========================
-// 🚀 Inicialización
 // ==========================
-window.addEventListener('DOMContentLoaded', () => {
-  // 📥 Cargar desde URL si existe ?data=
-  loadFromUrl();
-
-  // Mostrar título guardado
-  const storedTitle = localStorage.getItem('ruletaTitle');
-  const titleDisplay = document.querySelector('.container h1');
-  const titleInput = document.getElementById('newTitle');
-  if (storedTitle) {
-    titleDisplay.textContent = storedTitle;
-    titleInput.value = storedTitle;
-  } else {
-    titleInput.value = titleDisplay.textContent;
-  }
-
-  // Cambiar título
-  document.getElementById('changeTitleButton').addEventListener('click', () => {
-    const newTitle = titleInput.value.trim();
-    if (newTitle) {
-      titleDisplay.textContent = newTitle;
-      localStorage.setItem('ruletaTitle', newTitle);
-      showNotification("Título cambiado");
-    } else {
-      showNotification("Ingresa un título válido.", "error");
-    }
-  });
-// Función para acortar URLs usando is.gd (añadida)
-async function shortenUrl(longUrl) {
-    try {
-        const response = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`);
-        if (!response.ok) throw new Error(`Error en API: ${response.status}`);
-        return await response.text();
-    } catch (error) {
-        console.error("Error acortando URL:", error);
-        throw error;
-    }
-}
-
-// Compartir por URL
-const shareButton = document.getElementById('shareButton');
-const shareLinkInput = document.getElementById('shareLinkInput');
-
-shareButton.addEventListener('click', async () => {
-    const ruletaData = {
-        title: document.querySelector('.container h1').textContent,
-        segments: segments
-    };
-
-    const encodedData = encodeURIComponent(JSON.stringify(ruletaData));
-    const baseUrl = window.location.origin + window.location.pathname;
-    const longUrl = `${baseUrl}?data=${encodedData}`;
-
-    try {
-        // Añadido: Generar enlace corto
-        showNotification("Generando enlace corto...", "info");
-        const shortUrl = await shortenUrl(longUrl);
-        
-        // Añadido: Copiar enlace corto en lugar del largo
-        await navigator.clipboard.writeText(shortUrl);
-        shareLinkInput.style.display = "block";
-        shareLinkInput.value = shortUrl;
-        showNotification("¡Enlace corto copiado al portapapeles!", "clipboard");
-    } catch (err) {
-        console.error("Error al generar enlace corto:", err);
-        
-        // Añadido: Fallback a URL larga si falla el acortamiento
-        try {
-            await navigator.clipboard.writeText(longUrl);
-            shareLinkInput.style.display = "block";
-            shareLinkInput.value = longUrl;
-            showNotification("¡Enlace copiado! (Usamos URL larga)", "clipboard");
-        } catch (copyError) {
-            console.error("Error al copiar el enlace:", copyError);
-            showNotification("Error al copiar el enlace", "error");
-        }
-    }
-});
-
-// Inicializar
-loadQuestions();
-renderCards();
-
-function loadFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("data")) {
-        try {
-            const data = JSON.parse(decodeURIComponent(params.get("data")));
-
-            if (data.title) {
-                document.querySelector('.container h1').textContent = data.title;
-                localStorage.setItem('ruletaTitle', data.title);
-            }
-
-            if (Array.isArray(data.segments)) {
-                segments = data.segments.map(s => ({
-                    ...s,
-                    used: false // Resetear estado usado
-                }));
-                saveQuestions();
-                renderCards();
-                renderQuestionList();
-            }
-        } catch (e) {
-            console.error("❌ Error cargando datos desde URL:", e);
-            showNotification("Datos inválidos en la URL", "error");
-        }
-    }
-}
