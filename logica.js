@@ -252,24 +252,25 @@ document.getElementById('fullscreenButton').addEventListener('click', () => {
   } else {
     document.exitFullscreen();
   }
-});
-// ==========================
+});// ==========================
 // 🚀 Inicialización
 // ==========================
 window.addEventListener('DOMContentLoaded', () => {
+  // 📥 Cargar desde URL si existe ?data=
+  loadFromUrl();
+
+  // Mostrar título guardado
   const storedTitle = localStorage.getItem('ruletaTitle');
   const titleDisplay = document.querySelector('.container h1');
   const titleInput = document.getElementById('newTitle');
-
-  // Mostrar título guardado en pantalla y en el input
   if (storedTitle) {
     titleDisplay.textContent = storedTitle;
-    titleInput.value = storedTitle; // ✅ Esta línea llena el campo input con el título
+    titleInput.value = storedTitle;
   } else {
-    titleInput.value = titleDisplay.textContent; // Si no hay título guardado, usa el actual
+    titleInput.value = titleDisplay.textContent;
   }
 
-  // Cambiar título y guardar
+  // Cambiar título
   document.getElementById('changeTitleButton').addEventListener('click', () => {
     const newTitle = titleInput.value.trim();
     if (newTitle) {
@@ -281,115 +282,59 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Compartir por URL
+  const shareButton = document.getElementById('shareButton');
+  const shareLinkInput = document.getElementById('shareLinkInput');
 
-  // ==========================
-// 🔗 Compartir ruleta con enlace corto
-// ==========================
-
-// Elementos del DOM relacionados al compartir
-const shareButton = document.getElementById('shareButton');
-const shareLinkInput = document.getElementById('shareLinkInput');
-
-// Evento para generar y compartir la ruleta
-shareButton.addEventListener('click', async () => {
+  shareButton.addEventListener('click', async () => {
     const ruletaData = {
-        title: document.querySelector('.container h1').textContent,
-        segments: segments
+      title: document.querySelector('.container h1').textContent,
+      segments: segments
     };
 
     const encodedData = encodeURIComponent(JSON.stringify(ruletaData));
     const baseUrl = window.location.origin + window.location.pathname;
-    const longUrl = baseUrl + "?data=" + encodedData;
+    const longUrl = `${baseUrl}?data=${encodedData}`;
 
     try {
-        // Mostrar mensaje de espera
-        showNotification("Generando enlace corto...", "info");
-
-        // Acortar URL con TinyURL
-        const shortUrl = await shortenUrl(longUrl);
-
-        // Copiar al portapapeles
-        await navigator.clipboard.writeText(shortUrl);
-
-        // Mostrar el input con el enlace
-        shareLinkInput.style.display = "block";
-        shareLinkInput.value = shortUrl;
-
-        showNotification("¡Enlace corto copiado al portapapeles!", "clipboard");
+      // Copiar enlace (puedes quitar TinyURL si quieres evitar problemas)
+      await navigator.clipboard.writeText(longUrl);
+      shareLinkInput.style.display = "block";
+      shareLinkInput.value = longUrl;
+      showNotification("¡Enlace copiado al portapapeles!", "clipboard");
     } catch (err) {
-        console.error("Error al generar enlace corto:", err);
-
-        // Si falla, usa URL larga
-        try {
-            await navigator.clipboard.writeText(longUrl);
-            shareLinkInput.style.display = "block";
-            shareLinkInput.value = longUrl;
-            showNotification("¡Enlace copiado! (Usamos URL larga)", "clipboard");
-        } catch (copyError) {
-            showNotification("Error al copiar: " + copyError.message, "error");
-        }
+      console.error("Error al copiar el enlace:", err);
+      showNotification("Error al copiar el enlace", "error");
     }
-});
+  });
 
-// Función para acortar usando TinyURL
-async function shortenUrl(longUrl) {
-    const apiUrl = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`;
-    const response = await fetch(apiUrl);
-    if (!response.ok) {
-        throw new Error(`Error en API: ${response.status}`);
-    }
-    return await response.text();
-}
-
-
-// ==========================
-// 📥 Cargar datos desde URL
-// ==========================
-function loadFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("data")) {
-        try {
-            const data = JSON.parse(decodeURIComponent(params.get("data")));
-            if (data.title) {
-                document.querySelector('.container h1').textContent = data.title;
-                localStorage.setItem('ruletaTitle', data.title);
-            }
-            if (data.segments) {
-                segments = data.segments;
-                saveQuestions();
-                renderCards();
-                renderQuestionList();
-            }
-        } catch (e) {
-            console.error("Error cargando datos desde URL", e);
-        }
-    }
-}
-window.addEventListener('DOMContentLoaded', () => {
-    loadFromUrl(); // 👈 Agregado aquí
-
-    const storedTitle = localStorage.getItem('ruletaTitle');
-    if (storedTitle) {
-        document.querySelector('.container h1').textContent = storedTitle;
-    }
-
-    document.getElementById('changeTitleButton').addEventListener('click', () => {
-        const newTitle = document.getElementById('newTitle').value.trim();
-        if (newTitle) {
-            document.querySelector('.container h1').textContent = newTitle;
-            localStorage.setItem('ruletaTitle', newTitle);
-            showNotification("Título cambiado");
-        } else {
-            showNotification("Ingresa un título válido.", "error");
-        }
-    });
-
-    loadQuestions();
-    renderCards();
-});
-
-  // Inicializar preguntas y cartas
+  // Inicializar
   loadQuestions();
   renderCards();
 });
+function loadFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("data")) {
+    try {
+      const data = JSON.parse(decodeURIComponent(params.get("data")));
 
+      if (data.title) {
+        document.querySelector('.container h1').textContent = data.title;
+        localStorage.setItem('ruletaTitle', data.title);
+      }
+
+      if (Array.isArray(data.segments)) {
+        segments = data.segments.map(s => ({
+          ...s,
+          used: false // Resetear estado usado
+        }));
+        saveQuestions();
+        renderCards();
+        renderQuestionList();
+      }
+    } catch (e) {
+      console.error("❌ Error cargando datos desde URL:", e);
+      showNotification("Datos inválidos en la URL", "error");
+    }
+  }
+}
