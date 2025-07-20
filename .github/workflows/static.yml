@@ -1,5 +1,5 @@
 # Workflow para desplegar contenido estático en GitHub Pages
-name: Deplo Cartas_Dinamics
+name: Deplo Cartas_Dinamicas
 
 on:
   push:
