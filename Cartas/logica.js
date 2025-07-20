@@ -281,15 +281,26 @@ window.addEventListener('DOMContentLoaded', () => {
       showNotification("Ingresa un título válido.", "error");
     }
   });
+// Función para acortar URLs usando is.gd (añadida)
+async function shortenUrl(longUrl) {
+    try {
+        const response = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`);
+        if (!response.ok) throw new Error(`Error en API: ${response.status}`);
+        return await response.text();
+    } catch (error) {
+        console.error("Error acortando URL:", error);
+        throw error;
+    }
+}
 
-  // Compartir por URL
-  const shareButton = document.getElementById('shareButton');
-  const shareLinkInput = document.getElementById('shareLinkInput');
+// Compartir por URL
+const shareButton = document.getElementById('shareButton');
+const shareLinkInput = document.getElementById('shareLinkInput');
 
-  shareButton.addEventListener('click', async () => {
+shareButton.addEventListener('click', async () => {
     const ruletaData = {
-      title: document.querySelector('.container h1').textContent,
-      segments: segments
+        title: document.querySelector('.container h1').textContent,
+        segments: segments
     };
 
     const encodedData = encodeURIComponent(JSON.stringify(ruletaData));
@@ -297,44 +308,58 @@ window.addEventListener('DOMContentLoaded', () => {
     const longUrl = `${baseUrl}?data=${encodedData}`;
 
     try {
-      // Copiar enlace (puedes quitar TinyURL si quieres evitar problemas)
-      await navigator.clipboard.writeText(longUrl);
-      shareLinkInput.style.display = "block";
-      shareLinkInput.value = longUrl;
-      showNotification("¡Enlace copiado al portapapeles!", "clipboard");
+        // Añadido: Generar enlace corto
+        showNotification("Generando enlace corto...", "info");
+        const shortUrl = await shortenUrl(longUrl);
+        
+        // Añadido: Copiar enlace corto en lugar del largo
+        await navigator.clipboard.writeText(shortUrl);
+        shareLinkInput.style.display = "block";
+        shareLinkInput.value = shortUrl;
+        showNotification("¡Enlace corto copiado al portapapeles!", "clipboard");
     } catch (err) {
-      console.error("Error al copiar el enlace:", err);
-      showNotification("Error al copiar el enlace", "error");
+        console.error("Error al generar enlace corto:", err);
+        
+        // Añadido: Fallback a URL larga si falla el acortamiento
+        try {
+            await navigator.clipboard.writeText(longUrl);
+            shareLinkInput.style.display = "block";
+            shareLinkInput.value = longUrl;
+            showNotification("¡Enlace copiado! (Usamos URL larga)", "clipboard");
+        } catch (copyError) {
+            console.error("Error al copiar el enlace:", copyError);
+            showNotification("Error al copiar el enlace", "error");
+        }
     }
-  });
-
-  // Inicializar
-  loadQuestions();
-  renderCards();
 });
+
+// Inicializar
+loadQuestions();
+renderCards();
+
 function loadFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  if (params.has("data")) {
-    try {
-      const data = JSON.parse(decodeURIComponent(params.get("data")));
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("data")) {
+        try {
+            const data = JSON.parse(decodeURIComponent(params.get("data")));
 
-      if (data.title) {
-        document.querySelector('.container h1').textContent = data.title;
-        localStorage.setItem('ruletaTitle', data.title);
-      }
+            if (data.title) {
+                document.querySelector('.container h1').textContent = data.title;
+                localStorage.setItem('ruletaTitle', data.title);
+            }
 
-      if (Array.isArray(data.segments)) {
-        segments = data.segments.map(s => ({
-          ...s,
-          used: false // Resetear estado usado
-        }));
-        saveQuestions();
-        renderCards();
-        renderQuestionList();
-      }
-    } catch (e) {
-      console.error("❌ Error cargando datos desde URL:", e);
-      showNotification("Datos inválidos en la URL", "error");
+            if (Array.isArray(data.segments)) {
+                segments = data.segments.map(s => ({
+                    ...s,
+                    used: false // Resetear estado usado
+                }));
+                saveQuestions();
+                renderCards();
+                renderQuestionList();
+            }
+        } catch (e) {
+            console.error("❌ Error cargando datos desde URL:", e);
+            showNotification("Datos inválidos en la URL", "error");
+        }
     }
-  }
 }
